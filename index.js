@@ -1,9 +1,9 @@
-const Cilo = require('./lib/cilo');
+const Silo = require('./lib/silo');
 const tenantify = require('./lib/tenantify');
 const singlify = require('./lib/singlify');
 
 module.exports = {
-  Cilo,
+  Silo,
   tenantify,
   singlify
 }
