@@ -72,13 +72,21 @@ export MONGO_URL=mongodb://localhost:27017/leeram-erp?authSource=admin
 
 ## Quick start
 
-1. Initialize `mongose-silo`, ideally in your `models/index.js` directory.
+1. Initialize `mongose-silo`, 
+ideally in your `models/index.js` directory.
 
 ```js
-// models/index.js
+// src/models/index.js
 
-require('mongose-silo')
-const silo = Silo.initialize('mydb', 'Admin', modelsPath)
+"use strict";
+const path = require('path');
+
+const {Silo, tenantify, singlify} = require("mongoose-silo");
+const silo = new Silo('mydb', {
+  modelsPath: path.join(process.cwd(), process.env.MODELS_PATH),
+  modelsAlias: '@/models',
+  mainModel: 'Admin',
+});
 
 module.exports = {
   silo, 
@@ -96,7 +104,8 @@ compiles your schemas, and registers them with every tenant database, automagica
 ```js
 
 const Dashboard = mongoose.model('Dashboard', Schema({
-  title: String }));
+  title: String 
+}));
 
 // THE CHANGE: instead of registering your model yourself, 
 // simply expose your schema like so:
@@ -123,22 +132,8 @@ with:
   const Org = db().Org;           // way 2
 ```
 
-Full example:
 
-```js
-
-const tenantId = 'orgA'
-const { silo, db, singlify } = require('@/models/index')
-silo.switch(tenantId)
-
-await db().Dashboard.create({ 
-  title: 'Org A - Weekly report' })
-
-```
-
-
-
-### App routes
+### Usage with routes
 
 
 * Regular route
@@ -153,10 +148,11 @@ Below example, a trivial usecase, creates an org tenant. It uses the `singlify` 
 
 ```js
 
-app.post('/org', tenantify, async (req, res) => {
-  const { name, domain } = req.body
+// eg, signup route
+app.post('/signup', singlify, async (req, res) => {
+  const { subdomain, ...rest } = req.body
 
-  const tenant = await silo.createTenant(domain)
+  const tenant = await silo.createTenant(subdomain, rest)
   silo.switch(tenant.subdomain)
 
   const org = await db().Org.create({
@@ -187,6 +183,52 @@ app.get('/dashboard', tenantify, async (req, res) => {
 
 ```
 
+* Full example,
 
+1. Create `/signup` route (cf. above) to let your tenants register (`subdomain` i)
+1. Create a resource middleware for logged in tenants, like so:
+
+```js
+// your app.js
+
+const { silo, db, singlify, tenantify } = require('@/models')
+
+app.post('/api/dashboard', tenantify, async (req, res, next) => {
+
+  await db().Dashboard.create({ 
+    title: req.body.title
+  });
+
+});
+```
+
+2.  On Express side, optionally set env `HTTP_X_TENANT_ID` to custom header (defaults to `x-tenant-id`)
+3.  On client side finally, issue request with header on behalf of tenant, similar to:
+
+```shell
+
+# or your ReactJS app
+# remember to send tenant Id in headers,
+# it will be matched with subdomain provided on singup.
+curl https://localhost:3000
+   -H 'x-tenant-id: orgA'
+   -H 'Content-Type: application/json'
+   -d '{"title": "Org A - Weekly report" }' 
+```
+
+* Error handling
+
+`singlify` and `tenantify` midllewares yield error status
+as follows, for you to catch on client side:
+
+```shell
+  ...
+  return res.status(500).json({
+    success: false,
+    result: null,
+    message: error.message
+  });
+
+```
 
 
